@@ -50,6 +50,6 @@ Render Dashboard → New + → Blueprint → chọn repo này (dùng `render.yam
 | Thành viên      | Vai trò                    |
 | --------------- | -------------------------- |
 | Trần Quốc Phước | Trưởng nhóm, deploy, CI/CD |
-| B               | Database, backup/restore   |
+| Huỳnh Hoàng lâm | Database, backup/restore   |
 | C               | Backend                    |
 | D               | Frontend, load test        |
