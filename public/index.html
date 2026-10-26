@@ -12,7 +12,7 @@
   <!-- ================= SITE HEADER ================= -->
   <header class="site-header">
     <div class="header-container">
-      <a href="/" class="brand-logo">
+      <a href="#catalogSection" class="brand-logo" onclick="window.scrollTo({top:0, behavior:'smooth'})">
         <div class="brand-icon">🎬</div>
         <div>Cine<span class="accent">Cloud</span></div>
       </a>
@@ -33,8 +33,8 @@
 
         <!-- Auth buttons (khi chưa đăng nhập) -->
         <div class="auth-buttons" id="authButtons">
-          <button class="btn btn-secondary btn-sm" onclick="App.openModal('authModal')">Đăng nhập</button>
-          <button class="btn btn-primary btn-sm" onclick="App.openModal('authModal')">Đăng ký</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openAuthModal('login')">Đăng nhập</button>
+          <button class="btn btn-primary btn-sm" onclick="App.openAuthModal('register')">Đăng ký</button>
         </div>
 
         <!-- User profile badge (khi đã đăng nhập) -->
@@ -319,12 +319,19 @@
           <label class="form-label" for="diagApiUrlInput">Địa chỉ Backend API (Base URL):</label>
           <input type="text" id="diagApiUrlInput" class="form-control" placeholder="Ví dụ: http://localhost:3000 hoặc https://movie-booking.onrender.com">
           <small style="color:var(--text-dim);font-size:0.8rem;display:block;margin-top:0.35rem;">
-            Để trống để tự động nhận diện theo cùng máy chủ Express (port 3000).
+            Để trống để tự động nhận diện theo máy chủ phục vụ (hỗ trợ mọi cổng và domain).
           </small>
         </div>
 
+        <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;margin-top:1rem;background:rgba(255,255,255,0.03);padding:0.75rem;border-radius:var(--radius-md);border:1px solid var(--border-subtle);">
+          <input type="checkbox" id="diagForceDemoCheckbox" style="width:18px;height:18px;cursor:pointer;">
+          <label for="diagForceDemoCheckbox" style="font-size:0.88rem;cursor:pointer;user-select:none;color:var(--text-main);">
+            <strong>Bật chế độ Demo Offline</strong> (Trải nghiệm toàn diện không cần Database)
+          </label>
+        </div>
+
         <div style="border-top:1px solid var(--border-subtle);padding-top:1rem;font-size:0.85rem;color:var(--text-muted);">
-          📖 <strong>Tài liệu kỹ thuật:</strong> Xem toàn bộ đặc tả API và kiến trúc tại thư mục <code>docs/</code> hoặc <code>doc/</code> trong mã nguồn.
+          📖 <strong>Tài liệu kỹ thuật:</strong> Xem toàn bộ đặc tả API và kiến trúc tại thư mục <code>doc/</code> hoặc <code>docs/</code> trong mã nguồn.
         </div>
       </div>
       <div class="modal-footer">

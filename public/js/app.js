@@ -17,7 +17,9 @@ const App = (() => {
    */
   async function init() {
     // 1. Khởi tạo xác thực
-    Auth.init();
+    if (typeof Auth !== 'undefined' && Auth.init) {
+      Auth.init();
+    }
 
     // 2. Kiểm tra kết nối Backend
     await checkServerConnection();
@@ -35,14 +37,19 @@ const App = (() => {
   async function checkServerConnection() {
     const dot = document.getElementById('statusDot');
     const text = document.getElementById('statusText');
+    if (!dot || !text) return;
+
     const health = await API.checkHealth();
 
     if (health.ok) {
-      if (dot) dot.className = 'status-dot online';
-      if (text) text.textContent = `Backend Online (${health.ping}ms)`;
+      dot.className = 'status-dot online';
+      text.textContent = `Backend Online (${health.ping}ms)`;
+    } else if (health.isDemo) {
+      dot.className = 'status-dot demo';
+      text.textContent = 'Chế độ Demo (Chưa nối DB)';
     } else {
-      if (dot) dot.className = 'status-dot demo';
-      if (text) text.textContent = 'Chế độ Demo (Chưa nối DB)';
+      dot.className = 'status-dot demo';
+      text.textContent = 'Máy chủ Offline (Chế độ Demo)';
     }
   }
 
@@ -71,7 +78,7 @@ const App = (() => {
           <div class="state-box">
             <div class="state-icon">⚠️</div>
             <div class="state-title">Không tải được phim</div>
-            <div class="state-desc">${e.message}</div>
+            <div class="state-desc">${escapeHtml(e.message)}</div>
             <button class="btn btn-primary" onclick="App.loadMovies()">Thử lại</button>
           </div>
         `;
@@ -90,7 +97,7 @@ const App = (() => {
     container.innerHTML = genres.map(g => {
       const label = g === 'all' ? 'Tất cả' : g;
       const isActive = activeGenre === g ? 'active' : '';
-      return `<button type="button" class="filter-btn ${isActive}" data-genre="${g}">${label}</button>`;
+      return `<button type="button" class="filter-btn ${isActive}" data-genre="${escapeHtml(g)}">${escapeHtml(label)}</button>`;
     }).join('');
 
     container.querySelectorAll('.filter-btn').forEach(btn => {
@@ -112,7 +119,7 @@ const App = (() => {
     filteredMovies = allMovies.filter(m => {
       const matchGenre = activeGenre === 'all' || m.genre === activeGenre;
       const matchSearch = !searchVal ||
-        m.title.toLowerCase().includes(searchVal) ||
+        (m.title || '').toLowerCase().includes(searchVal) ||
         (m.description || '').toLowerCase().includes(searchVal);
       return matchGenre && matchSearch;
     });
@@ -140,7 +147,7 @@ const App = (() => {
 
     grid.innerHTML = filteredMovies.map(movie => {
       const posterHtml = movie.poster_url
-        ? `<img class="movie-poster-img" src="${movie.poster_url}" alt="${movie.title}" onerror="this.onerror=null; this.parentElement.innerHTML=App.getFallbackPosterHtml('${escapeHtml(movie.title)}', '${escapeHtml(movie.genre || '')}')">`
+        ? `<img class="movie-poster-img" src="${movie.poster_url}" alt="${escapeHtml(movie.title)}" onerror="this.onerror=null; this.parentElement.innerHTML=App.getFallbackPosterHtml('${escapeHtml(movie.title)}', '${escapeHtml(movie.genre || '')}')">`
         : getFallbackPosterHtml(movie.title, movie.genre);
 
       return `
@@ -148,7 +155,7 @@ const App = (() => {
           <div class="movie-poster-wrap">
             ${posterHtml}
             <div class="movie-badges">
-              <span class="badge-genre">${movie.genre || 'Phim'}</span>
+              <span class="badge-genre">${escapeHtml(movie.genre || 'Phim')}</span>
               <span class="badge-duration">${movie.duration_min || 120} phút</span>
             </div>
           </div>
@@ -195,7 +202,6 @@ const App = (() => {
     selectedMovie = allMovies.find(m => m.id === Number(movieId));
     if (!selectedMovie) return;
 
-    const modal = document.getElementById('movieDetailsModal');
     const titleEl = document.getElementById('modalMovieTitle');
     const genreEl = document.getElementById('modalMovieGenre');
     const durEl = document.getElementById('modalMovieDuration');
@@ -216,8 +222,9 @@ const App = (() => {
       } else {
         showtimesEl.innerHTML = showtimes.map(st => {
           const date = new Date(st.start_time);
-          const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-          const dateStr = date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
+          const isValidDate = !isNaN(date.getTime());
+          const timeStr = isValidDate ? date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '19:30';
+          const dateStr = isValidDate ? date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) : 'Hôm nay';
           const price = Number(st.price) || 90000;
 
           return `
@@ -278,20 +285,25 @@ const App = (() => {
 
     if (infoEl) {
       const date = new Date(selectedShowtime.start_time);
-      const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      const dateStr = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      infoEl.textContent = `${timeStr} - ${dateStr}`;
+      const isValidDate = !isNaN(date.getTime());
+      if (isValidDate) {
+        const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        const dateStr = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        infoEl.textContent = `${timeStr} - ${dateStr}`;
+      } else {
+        infoEl.textContent = 'Suất chiếu sắp tới';
+      }
     }
 
     // Vẽ sơ đồ ghế
     const container = document.getElementById('seatsGridContainer');
-    Seats.initSeatMap(movie, selectedShowtime, container);
+    await Seats.initSeatMap(movie, selectedShowtime, container);
 
     openModal('seatBookingModal');
   }
 
   /**
-   * Xác nhận đặt vé (Gọi API hoặc Giả lập nếu Backend 501)
+   * Xác nhận đặt vé (Gọi API hoặc Giả lập nếu Backend 501 / Offline)
    */
   async function handleConfirmBooking() {
     const seats = Seats.getSelectedSeats();
@@ -303,7 +315,7 @@ const App = (() => {
     // Kiểm tra đăng nhập
     if (!Auth.isLoggedIn()) {
       showToast('Vui lòng đăng nhập để tiến hành đặt vé', 'info');
-      openModal('authModal');
+      openAuthModal('login');
       return;
     }
 
@@ -331,7 +343,7 @@ const App = (() => {
       displayTicketConfirmation(result);
 
       if (result.isSimulated) {
-        showToast('Đặt vé mô phỏng thành công! (API Backend đang phát triển tuần 3)', 'success');
+        showToast('Đặt vé mô phỏng thành công! (Lưu phiên Demo)', 'success');
       } else {
         showToast('Đặt vé thành công và đã lưu vào cơ sở dữ liệu!', 'success');
       }
@@ -362,7 +374,7 @@ const App = (() => {
 
     if (timeEl) {
       const d = new Date(booking.start_time || selectedShowtime?.start_time || Date.now());
-      timeEl.textContent = d.toLocaleString('vi-VN');
+      timeEl.textContent = !isNaN(d.getTime()) ? d.toLocaleString('vi-VN') : 'Suất chiếu sắp tới';
     }
 
     if (seatsEl) {
@@ -383,7 +395,7 @@ const App = (() => {
   async function openMyBookingsModal() {
     if (!Auth.isLoggedIn()) {
       showToast('Vui lòng đăng nhập để xem danh sách vé của bạn', 'info');
-      openModal('authModal');
+      openAuthModal('login');
       return;
     }
 
@@ -412,7 +424,8 @@ const App = (() => {
       if (listContainer) {
         listContainer.innerHTML = bookings.map(b => {
           const seats = Array.isArray(b.seats) ? b.seats.join(', ') : (b.seats || 'Ghế');
-          const dateStr = new Date(b.start_time || b.created_at).toLocaleString('vi-VN');
+          const d = new Date(b.start_time || b.created_at);
+          const dateStr = !isNaN(d.getTime()) ? d.toLocaleString('vi-VN') : 'Đã xác nhận';
           const price = Number(b.total_price) || 0;
 
           return `
@@ -423,11 +436,11 @@ const App = (() => {
                   📍 ${escapeHtml(b.theater_name || 'Phòng 1')} • ⏰ ${dateStr}
                 </div>
                 <div style="font-size:0.85rem;color:var(--accent-green);font-weight:600;margin-top:0.2rem;">
-                  Ghế: ${seats}
+                  Ghế: ${escapeHtml(seats)}
                 </div>
               </div>
               <div style="text-align:right;">
-                <div style="font-family:monospace;font-weight:700;color:var(--accent-gold);">${b.booking_code || '#' + b.id}</div>
+                <div style="font-family:monospace;font-weight:700;color:var(--accent-gold);">${escapeHtml(b.booking_code || '#' + b.id)}</div>
                 <div style="font-weight:700;font-size:1rem;color:#fff;margin-top:0.2rem;">${Seats.formatCurrency(price)}</div>
                 <span class="user-role-tag" style="background:rgba(16,185,129,0.15);color:var(--accent-green);border-color:rgba(16,185,129,0.3);">Đã xác nhận</span>
               </div>
@@ -437,7 +450,7 @@ const App = (() => {
       }
     } catch (e) {
       if (listContainer) {
-        listContainer.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Lỗi tải vé: ${e.message}</div>`;
+        listContainer.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Lỗi tải vé: ${escapeHtml(e.message)}</div>`;
       }
     }
   }
@@ -448,43 +461,90 @@ const App = (() => {
   async function openDiagnosticModal() {
     const urlInput = document.getElementById('diagApiUrlInput');
     const healthEl = document.getElementById('diagHealthResult');
-    const currentBase = API.getBaseUrl() || window.location.origin;
+    const forceDemoCheck = document.getElementById('diagForceDemoCheckbox');
 
-    if (urlInput) urlInput.value = localStorage.getItem('custom_api_url') || '';
+    if (urlInput && typeof localStorage !== 'undefined') {
+      urlInput.value = localStorage.getItem('custom_api_url') || '';
+    }
+    if (forceDemoCheck && typeof localStorage !== 'undefined') {
+      forceDemoCheck.checked = localStorage.getItem('force_demo_mode') === 'true';
+    }
     if (healthEl) healthEl.textContent = 'Đang kiểm tra kết nối...';
 
     openModal('diagnosticModal');
 
     const health = await API.checkHealth();
     if (healthEl) {
-      healthEl.innerHTML = health.ok
-        ? `<span style="color:var(--accent-green);font-weight:600;">✅ Kết nối thành công!</span> DB Time: ${health.data.dbTime || 'N/A'} (Ping: ${health.ping}ms)`
-        : `<span style="color:var(--accent-red);font-weight:600;">❌ Không kết nối được:</span> ${health.error}`;
+      if (health.ok) {
+        healthEl.innerHTML = `<span style="color:var(--accent-green);font-weight:600;">✅ Kết nối thành công!</span> DB Time: ${escapeHtml(health.data.dbTime || 'N/A')} (Ping: ${health.ping}ms)`;
+      } else if (health.isDemo) {
+        healthEl.innerHTML = `<span style="color:var(--accent-gold);font-weight:600;">⚡ Chế độ Demo:</span> ${escapeHtml(health.error || 'Database chưa sẵn sàng, ứng dụng tự động hoạt động ở chế độ Demo mô phỏng.')}`;
+      } else {
+        healthEl.innerHTML = `<span style="color:var(--accent-red);font-weight:600;">❌ Không kết nối được:</span> ${escapeHtml(health.error)}`;
+      }
     }
   }
 
   /**
-   * Lưu cấu hình URL tùy chỉnh
+   * Lưu cấu hình URL tùy chỉnh và chế độ Demo
    */
   function saveCustomApiUrl() {
     const input = document.getElementById('diagApiUrlInput');
     const val = (input?.value || '').trim();
-    if (val) {
-      localStorage.setItem('custom_api_url', val);
-      showToast(`Đã lưu URL Backend: ${val}`, 'success');
-    } else {
-      localStorage.removeItem('custom_api_url');
-      showToast('Đã khôi phục URL tự động mặc định', 'info');
+    if (typeof localStorage !== 'undefined') {
+      if (val) {
+        localStorage.setItem('custom_api_url', val);
+        showToast(`Đã lưu URL Backend: ${val}`, 'success');
+      } else {
+        localStorage.removeItem('custom_api_url');
+        showToast('Đã khôi phục URL tự động mặc định', 'info');
+      }
+
+      const forceDemoCheck = document.getElementById('diagForceDemoCheckbox');
+      if (forceDemoCheck) {
+        if (forceDemoCheck.checked) {
+          localStorage.setItem('force_demo_mode', 'true');
+          showToast('Đã bật chế độ Demo Offline (Không cần Backend)', 'info');
+        } else {
+          localStorage.removeItem('force_demo_mode');
+        }
+      }
     }
+
     closeModal('diagnosticModal');
     checkServerConnection();
     loadMovies();
   }
 
   /**
+   * Mở modal Auth với tab chỉ định ('login' hoặc 'register')
+   */
+  function openAuthModal(tab = 'login') {
+    const tabLogin = document.getElementById('tabLoginBtn');
+    const tabRegister = document.getElementById('tabRegisterBtn');
+    const loginFormContainer = document.getElementById('loginFormContainer');
+    const registerFormContainer = document.getElementById('registerFormContainer');
+
+    if (tab === 'register') {
+      if (tabRegister) tabRegister.classList.add('active');
+      if (tabLogin) tabLogin.classList.remove('active');
+      if (loginFormContainer) loginFormContainer.style.display = 'none';
+      if (registerFormContainer) registerFormContainer.style.display = 'block';
+    } else {
+      if (tabLogin) tabLogin.classList.add('active');
+      if (tabRegister) tabRegister.classList.remove('active');
+      if (loginFormContainer) loginFormContainer.style.display = 'block';
+      if (registerFormContainer) registerFormContainer.style.display = 'none';
+    }
+
+    openModal('authModal');
+  }
+
+  /**
    * Thông báo Toast nổi bật
    */
   function showToast(message, type = 'info') {
+    if (typeof document === 'undefined') return;
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
@@ -574,7 +634,7 @@ const App = (() => {
           const res = await Auth.login(email, password);
           closeModal('authModal');
           if (res.isSimulated) {
-            showToast('Đăng nhập mô phỏng thành công! (API Backend đang phát triển tuần 2)', 'success');
+            showToast('Đăng nhập mô phỏng thành công! (Phiên Demo)', 'success');
           } else {
             showToast('Đăng nhập thành công!', 'success');
           }
@@ -602,8 +662,9 @@ const App = (() => {
         try {
           const res = await Auth.register(email, password, fullName);
           closeModal('authModal');
+          registerForm.reset();
           if (res.isSimulated) {
-            showToast('Đăng ký mô phỏng thành công! (API Backend đang phát triển tuần 2)', 'success');
+            showToast('Đăng ký mô phỏng thành công! (Phiên Demo)', 'success');
           } else {
             showToast('Đăng ký tài khoản thành công!', 'success');
           }
@@ -617,18 +678,8 @@ const App = (() => {
     const tabLogin = document.getElementById('tabLoginBtn');
     const tabRegister = document.getElementById('tabRegisterBtn');
     if (tabLogin && tabRegister) {
-      tabLogin.addEventListener('click', () => {
-        tabLogin.classList.add('active');
-        tabRegister.classList.remove('active');
-        document.getElementById('loginFormContainer').style.display = 'block';
-        document.getElementById('registerFormContainer').style.display = 'none';
-      });
-      tabRegister.addEventListener('click', () => {
-        tabRegister.classList.add('active');
-        tabLogin.classList.remove('active');
-        document.getElementById('loginFormContainer').style.display = 'none';
-        document.getElementById('registerFormContainer').style.display = 'block';
-      });
+      tabLogin.addEventListener('click', () => openAuthModal('login'));
+      tabRegister.addEventListener('click', () => openAuthModal('register'));
     }
 
     // Nút đăng xuất
@@ -639,6 +690,13 @@ const App = (() => {
         showToast('Đã đăng xuất', 'info');
       });
     }
+
+    // Lắng nghe phím ESC để đóng modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-backdrop.active').forEach(m => m.classList.remove('active'));
+      }
+    });
   }
 
   return {
@@ -649,13 +707,20 @@ const App = (() => {
     selectShowtimeAndBook,
     openMyBookingsModal,
     openDiagnosticModal,
+    openAuthModal,
     saveCustomApiUrl,
     showToast,
     openModal,
     closeModal,
-    getFallbackPosterHtml
+    getFallbackPosterHtml,
+    escapeHtml
   };
 })();
 
-// Khởi chạy khi DOM sẵn sàng
-document.addEventListener('DOMContentLoaded', App.init);
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', App.init);
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = App;
+}

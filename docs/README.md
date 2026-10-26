@@ -9,11 +9,11 @@
 
 | Tài liệu | Nội dung chính | Đối tượng |
 | :--- | :--- | :--- |
-| [1. Kiến trúc Backend](file:///d:/Study/School_Project/Icloud_BTL/docs/backend-architecture.md) | Vòng đời request, Express server, PostgreSQL connection pool, Render deployment | Backend, Frontend, DevOps |
-| [2. Đặc tả API (API Spec)](file:///d:/Study/School_Project/Icloud_BTL/docs/api-specification.md) | Toàn bộ endpoints, Headers, Request/Response payload, HTTP status codes | Backend, Frontend |
-| [3. Cơ sở dữ liệu & Schema](file:///d:/Study/School_Project/Icloud_BTL/docs/database-schema.md) | Cấu trúc 6 bảng, quan hệ khóa ngoại, ràng buộc chống trùng ghế, backup/restore | Database, Backend |
-| [4. Tích hợp Frontend - Backend](file:///d:/Study/School_Project/Icloud_BTL/docs/frontend-backend-integration.md) | Nguyên tắc tương thích, CORS, JWT Auth header, xử lý kiểu dữ liệu, cơ chế 501 stub | Frontend, Backend |
-| [5. Hướng dẫn cài đặt từ Git Clone](file:///d:/Study/School_Project/Icloud_BTL/docs/setup-and-run-guide.md) | Hướng dẫn chạy từ A-Z sau khi `git clone`, cấu hình `.env`, init db, xử lý lỗi | Toàn bộ thành viên |
+| [1. Kiến trúc Backend](./backend-architecture.md) | Vòng đời request, Express server, PostgreSQL connection pool, Render deployment | Backend, Frontend, DevOps |
+| [2. Đặc tả API (API Spec)](./api-specification.md) | Toàn bộ endpoints, Headers, Request/Response payload, HTTP status codes | Backend, Frontend |
+| [3. Cơ sở dữ liệu & Schema](./database-schema.md) | Cấu trúc 6 bảng, quan hệ khóa ngoại, ràng buộc chống trùng ghế, backup/restore | Database, Backend |
+| [4. Tích hợp Frontend - Backend](./frontend-backend-integration.md) | Nguyên tắc tương thích, CORS, JWT Auth header, xử lý kiểu dữ liệu, cơ chế 501 stub | Frontend, Backend |
+| [5. Hướng dẫn cài đặt từ Git Clone](./setup-and-run-guide.md) | Hướng dẫn chạy từ A-Z sau khi `git clone`, cấu hình `.env`, init db, xử lý lỗi | Toàn bộ thành viên |
 
 ---
 

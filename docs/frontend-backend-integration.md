@@ -18,19 +18,21 @@ Frontend cần hoạt động tốt trong cả 2 tình huống:
 
 ### Giải pháp xử lý trong `public/js/api.js`:
 ```javascript
-const API_CONFIG = {
-  // Nếu Frontend mở từ port của Express (3000), dùng relative ''
-  // Nếu mở từ Live Server (5500), tự động fallback về 'http://localhost:3000'
-  getBaseUrl() {
-    const custom = localStorage.getItem('custom_api_url');
-    if (custom) return custom.replace(/\/$/, '');
-    
-    const isNodeHosted = window.location.port === '3000' || window.location.hostname.includes('render.com');
-    return isNodeHosted ? '' : 'http://localhost:3000';
-  }
-};
+function getBaseUrl() {
+  const custom = localStorage.getItem('custom_api_url');
+  if (custom) return custom.trim().replace(/\/$/, '');
+
+  if (window.location.protocol === 'file:') return 'http://localhost:3000';
+
+  // Standalone frontend dev servers (Live Server 5500, Vite 5173...)
+  const standaloneDevPorts = ['5500', '5501', '5502', '5173', '63342', '8080'];
+  if (standaloneDevPorts.includes(window.location.port)) return 'http://localhost:3000';
+
+  // Express host (mọi cổng 3000, 3001, 5000, Render, custom domain...) -> relative URL
+  return '';
+}
 ```
-Frontend còn cung cấp **Backend Diagnostic Modal** cho phép người dùng hoặc người chấm thi đổi URL API sang URL Render thật mà không cần sửa code.
+Frontend còn cung cấp **Backend Diagnostic Modal** cho phép người dùng đổi URL API hoặc bật ngay **Chế độ Demo Offline** mà không cần sửa code.
 
 ---
 

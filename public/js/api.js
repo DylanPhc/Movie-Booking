@@ -45,25 +45,40 @@ const API = (() => {
   const state = {
     serverStatus: 'checking', // 'online' | 'demo' | 'offline'
     dbTime: null,
-    isDemoMode: false,
+    isDemoMode: typeof localStorage !== 'undefined' && localStorage.getItem('force_demo_mode') === 'true',
     lastPing: 0
   };
 
   /**
    * Tự động xác định Base URL thông minh:
    * 1. Nếu người dùng cấu hình URL tùy chỉnh trong localStorage -> dùng nó.
-   * 2. Nếu Frontend được Express serve chung (port 3000 hoặc host Render) -> dùng relative ''.
-   * 3. Nếu Frontend mở độc lập (như Live Server 5500) -> tự trỏ về 'http://localhost:3000'.
+   * 2. Nếu Frontend mở qua file:// hoặc các cổng standalone dev server (5500, 5173...) -> trỏ về http://localhost:3000.
+   * 3. Nếu Frontend được Express serve (port 3000, 3001, 5000, Render, hay bất kỳ domain nào) -> dùng relative '' để luôn luôn tương thích.
    */
   function getBaseUrl() {
-    const custom = localStorage.getItem('custom_api_url');
-    if (custom) return custom.trim().replace(/\/$/, '');
+    if (typeof localStorage !== 'undefined') {
+      const custom = localStorage.getItem('custom_api_url');
+      if (custom) return custom.trim().replace(/\/$/, '');
+    }
 
-    const port = window.location.port;
-    const hostname = window.location.hostname;
-    const isExpressHost = port === '3000' || hostname.includes('onrender.com');
+    if (typeof window === 'undefined') {
+      return 'http://localhost:3000';
+    }
 
-    return isExpressHost ? '' : 'http://localhost:3000';
+    // Khi chạy mở trực tiếp file HTML qua file:///
+    if (window.location.protocol === 'file:') {
+      return 'http://localhost:3000';
+    }
+
+    const port = String(window.location.port || '');
+    // Danh sách cổng phổ biến của standalone frontend dev server (VS Code Live Server, Vite, WebStorm, http-server)
+    const standaloneDevPorts = ['5500', '5501', '5502', '5173', '63342', '8080'];
+    if (standaloneDevPorts.includes(port)) {
+      return 'http://localhost:3000';
+    }
+
+    // Mặc định: Phục vụ qua Express trên cùng host/port hoặc domain bất kỳ -> dùng relative URL
+    return '';
   }
 
   /**
@@ -73,9 +88,11 @@ const API = (() => {
     const headers = {
       'Content-Type': 'application/json'
     };
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (typeof localStorage !== 'undefined') {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
     }
     return headers;
   }
@@ -110,10 +127,12 @@ const API = (() => {
         }
 
         // Xử lý mã lỗi 401 (Hết hạn hoặc sai token)
-        if (response.status === 401) {
+        if (response.status === 401 && typeof localStorage !== 'undefined') {
           localStorage.removeItem('auth_token');
           localStorage.removeItem('auth_user');
-          window.dispatchEvent(new CustomEvent('auth:expired'));
+          if (typeof window !== 'undefined' && window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('auth:expired'));
+          }
         }
 
         const err = new Error(data.error || data.message || `Lỗi máy chủ (${response.status})`);
@@ -124,10 +143,12 @@ const API = (() => {
 
       return data;
     } catch (error) {
-      // Bắt lỗi không kết nối được (Network error)
-      if (!error.status && error.message.includes('fetch')) {
-        const netErr = new Error(`Không thể kết nối đến máy chủ tại ${baseUrl || window.location.origin}`);
+      // Bắt lỗi không kết nối được (Network error trên mọi trình duyệt)
+      if (!error.status) {
+        const targetHost = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+        const netErr = new Error(`Không thể kết nối đến máy chủ tại ${targetHost}`);
         netErr.status = 0;
+        netErr.originalError = error;
         throw netErr;
       }
       throw error;
@@ -138,16 +159,35 @@ const API = (() => {
    * Kiểm tra sức khỏe máy chủ (/health)
    */
   async function checkHealth() {
+    // Nếu người dùng chủ động chọn chế độ Demo độc lập
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('force_demo_mode') === 'true') {
+      state.isDemoMode = true;
+      state.serverStatus = 'demo';
+      return { ok: false, isDemo: true, ping: 0, error: 'Chế độ Demo Offline (Không dùng Backend)' };
+    }
+
     try {
       const start = Date.now();
       const res = await request('/health');
       state.lastPing = Date.now() - start;
-      state.serverStatus = res.status === 'ok' ? 'online' : 'demo';
-      state.dbTime = res.dbTime || null;
-      return { ok: true, data: res, ping: state.lastPing };
+
+      if (res.status === 'ok') {
+        state.serverStatus = 'online';
+        state.isDemoMode = false;
+        state.dbTime = res.dbTime || null;
+        return { ok: true, data: res, ping: state.lastPing };
+      } else {
+        // Backend sống nhưng PostgreSQL chưa kết nối thành công
+        state.serverStatus = 'demo';
+        state.isDemoMode = true;
+        state.dbTime = null;
+        return { ok: false, isDemo: true, data: res, ping: state.lastPing, error: res.message || 'Chưa nối database' };
+      }
     } catch (e) {
-      state.serverStatus = 'offline';
-      return { ok: false, error: e.message };
+      // Backend trả 500 (DB lỗi) hoặc 0 (server chưa khởi chạy)
+      state.serverStatus = e.status === 500 ? 'demo' : 'offline';
+      state.isDemoMode = true;
+      return { ok: false, isDemo: true, error: e.message, status: e.status };
     }
   }
 
@@ -163,11 +203,10 @@ const API = (() => {
       if (Array.isArray(movies) && movies.length > 0) {
         return movies;
       }
-      // Nếu DB chưa seed, tự fallback dữ liệu mẫu
-      console.warn('Database chưa có phim, đang hiển thị phim mẫu...');
+      // Nếu DB chưa có dữ liệu phim, tự động dùng phim mẫu
       return MOCK_MOVIES;
     } catch (e) {
-      console.warn('Không gọi được API movies, dùng dữ liệu mẫu:', e.message);
+      console.warn('Không gọi được API movies, chuyển sang dữ liệu mẫu:', e.message);
       return MOCK_MOVIES;
     }
   }
@@ -176,13 +215,14 @@ const API = (() => {
    * Lấy chi tiết 1 phim (GET /api/movies/:id)
    */
   async function getMovieById(id) {
+    const numId = Number(id);
     if (state.isDemoMode) {
-      return MOCK_MOVIES.find(m => m.id === Number(id)) || MOCK_MOVIES[0];
+      return MOCK_MOVIES.find(m => m.id === numId) || MOCK_MOVIES[0];
     }
     try {
-      return await request(`/api/movies/${id}`);
+      return await request(`/api/movies/${numId}`);
     } catch (e) {
-      return MOCK_MOVIES.find(m => m.id === Number(id)) || MOCK_MOVIES[0];
+      return MOCK_MOVIES.find(m => m.id === numId) || MOCK_MOVIES[0];
     }
   }
 
@@ -190,33 +230,89 @@ const API = (() => {
    * Lấy các suất chiếu của phim (GET /api/movies/:id/showtimes)
    */
   async function getShowtimes(movieId) {
-    if (state.isDemoMode) {
-      return MOCK_SHOWTIMES.filter(s => s.movie_id === Number(movieId));
-    }
-    try {
-      const list = await request(`/api/movies/${movieId}/showtimes`);
-      if (Array.isArray(list) && list.length > 0) {
-        return list;
+    const mid = Number(movieId);
+    if (!state.isDemoMode) {
+      try {
+        const list = await request(`/api/movies/${mid}/showtimes`);
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      } catch (e) {
+        // Fallback sang suất chiếu mẫu
       }
-      // Nếu DB chưa có suất chiếu trong tương lai, fallback suất chiếu mẫu
-      return MOCK_SHOWTIMES.filter(s => s.movie_id === Number(movieId));
-    } catch (e) {
-      return MOCK_SHOWTIMES.filter(s => s.movie_id === Number(movieId));
     }
+
+    // Suất chiếu mẫu
+    let showtimes = MOCK_SHOWTIMES.filter(s => s.movie_id === mid);
+    if (showtimes.length === 0) {
+      // Tự động sinh suất chiếu mẫu cho bất kỳ ID phim nào để không bao giờ bị cụt luồng
+      const tomorrow = new Date(Date.now() + 86400000);
+      tomorrow.setHours(19, 30, 0, 0);
+      const dayAfter = new Date(Date.now() + 172800000);
+      dayAfter.setHours(20, 15, 0, 0);
+
+      showtimes = [
+        { id: mid * 10 + 1, movie_id: mid, theater: 'Phòng 1 (Standard)', start_time: tomorrow.toISOString(), price: '90000.00' },
+        { id: mid * 10 + 2, movie_id: mid, theater: 'Phòng 2 (VIP Dolby Atmos)', start_time: dayAfter.toISOString(), price: '95000.00' }
+      ];
+    }
+    return showtimes;
+  }
+
+  /**
+   * Lấy danh sách ghế đã được đặt cho 1 suất chiếu (GET /api/showtimes/:id/booked-seats)
+   */
+  async function getBookedSeats(showtimeId) {
+    const stId = Number(showtimeId);
+    let booked = [];
+
+    // 1. Thử gọi API thật nếu không ở chế độ demo
+    if (!state.isDemoMode) {
+      try {
+        const res = await request(`/api/showtimes/${stId}/booked-seats`);
+        if (res && Array.isArray(res.booked_seats)) {
+          booked = res.booked_seats;
+        } else if (Array.isArray(res)) {
+          booked = res;
+        }
+      } catch (e) {
+        // Backend chưa có endpoint này hoặc offline -> fallback
+      }
+    }
+
+    // 2. Kết hợp với các vé đã lưu trong phiên demo cục bộ
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const demoBookings = JSON.parse(localStorage.getItem('demo_bookings') || '[]');
+        demoBookings
+          .filter(b => Number(b.showtime_id) === stId)
+          .forEach(b => {
+            if (Array.isArray(b.seats)) {
+              b.seats.forEach(s => { if (!booked.includes(s)) booked.push(s); });
+            }
+          });
+      } catch (e) {
+        // Bỏ qua lỗi parse
+      }
+    }
+
+    return booked;
   }
 
   /**
    * Đăng ký tài khoản (POST /api/auth/register)
    */
   async function register(userData) {
+    if (state.isDemoMode) {
+      return simulateAuthSuccess(userData);
+    }
     try {
       return await request('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify(userData)
       });
     } catch (e) {
-      if (e.status === 501) {
-        // Backend đang là stub "Chưa làm" -> Tạo phiên Demo cục bộ
+      if (e.status === 501 || e.status === 0 || state.isDemoMode) {
         return simulateAuthSuccess(userData);
       }
       throw e;
@@ -227,17 +323,22 @@ const API = (() => {
    * Đăng nhập (POST /api/auth/login)
    */
   async function login(credentials) {
+    if (state.isDemoMode) {
+      return simulateAuthSuccess({
+        email: credentials.email,
+        full_name: (credentials.email || 'user').split('@')[0]
+      });
+    }
     try {
       return await request('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials)
       });
     } catch (e) {
-      if (e.status === 501) {
-        // Backend đang là stub "Chưa làm" -> Tạo phiên Demo cục bộ
+      if (e.status === 501 || e.status === 0 || state.isDemoMode) {
         return simulateAuthSuccess({
           email: credentials.email,
-          full_name: credentials.email.split('@')[0]
+          full_name: (credentials.email || 'user').split('@')[0]
         });
       }
       throw e;
@@ -248,14 +349,16 @@ const API = (() => {
    * Đặt vé xem phim (POST /api/bookings)
    */
   async function createBooking(bookingData) {
+    if (state.isDemoMode) {
+      return simulateBookingSuccess(bookingData);
+    }
     try {
       return await request('/api/bookings', {
         method: 'POST',
         body: JSON.stringify(bookingData)
       });
     } catch (e) {
-      if (e.status === 501) {
-        // Backend chưa hoàn thành endpoint đặt vé -> Giả lập hoàn tất đơn hàng
+      if (e.status === 501 || e.status === 0 || state.isDemoMode) {
         return simulateBookingSuccess(bookingData);
       }
       throw e;
@@ -266,24 +369,32 @@ const API = (() => {
    * Lấy lịch sử vé của tôi (GET /api/bookings/me)
    */
   async function getMyBookings() {
-    try {
-      return await request('/api/bookings/me');
-    } catch (e) {
-      if (e.status === 501 || e.status === 0) {
-        // Lấy danh sách vé đã lưu trong phiên demo
-        const localBookings = JSON.parse(localStorage.getItem('demo_bookings') || '[]');
-        return localBookings;
+    if (!state.isDemoMode) {
+      try {
+        const bookings = await request('/api/bookings/me');
+        if (Array.isArray(bookings)) {
+          return bookings;
+        }
+      } catch (e) {
+        if (e.status !== 501 && e.status !== 0) {
+          throw e;
+        }
       }
-      throw e;
     }
+
+    // Lấy danh sách vé đã lưu trong phiên demo
+    if (typeof localStorage !== 'undefined') {
+      return JSON.parse(localStorage.getItem('demo_bookings') || '[]');
+    }
+    return [];
   }
 
-  // --- HÀM GIẢ LẬP KHI BACKEND TRẢ 501 (CHƯA XONG) ---
+  // --- HÀM GIẢ LẬP KHI BACKEND TRẢ 501 HOẶC OFFLINE ---
   function simulateAuthSuccess(user) {
     const simulatedToken = 'mock_jwt_' + Math.random().toString(36).substring(2);
     const simulatedUser = {
       id: Math.floor(Math.random() * 1000) + 1,
-      email: user.email,
+      email: user.email || 'user@cinecloud.vn',
       full_name: user.full_name || 'Khách xem phim',
       role: 'user'
     };
@@ -299,16 +410,21 @@ const API = (() => {
       seats: data.seats,
       total_price: data.total_price || (data.seats.length * 90000),
       movie_title: data.movie_title || 'Phim đã chọn',
-      theater_name: data.theater_name || 'Phòng chiếu 1',
+      theater_name: data.theater_name || 'Phòng 1',
       start_time: data.start_time || new Date().toISOString(),
       created_at: new Date().toISOString(),
       isSimulated: true
     };
 
-    // Lưu vào localStorage để người dùng xem lại ở "Vé của tôi"
-    const current = JSON.parse(localStorage.getItem('demo_bookings') || '[]');
-    current.unshift(booking);
-    localStorage.setItem('demo_bookings', JSON.stringify(current));
+    if (typeof localStorage !== 'undefined') {
+      const current = JSON.parse(localStorage.getItem('demo_bookings') || '[]');
+      current.unshift(booking);
+      localStorage.setItem('demo_bookings', JSON.stringify(current));
+    }
+
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('booking:created', { detail: booking }));
+    }
 
     return booking;
   }
@@ -316,13 +432,22 @@ const API = (() => {
   return {
     state,
     getBaseUrl,
+    getHeaders,
+    request,
     checkHealth,
     getMovies,
     getMovieById,
     getShowtimes,
+    getBookedSeats,
     register,
     login,
     createBooking,
-    getMyBookings
+    getMyBookings,
+    simulateAuthSuccess,
+    simulateBookingSuccess
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = API;
+}
