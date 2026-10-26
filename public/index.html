@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đặt vé xem phim</title>
+</head>
+<body>
+  <h1>Đặt vé xem phim</h1>
+  <ul id="movies">Đang tải...</ul>
+  <script>
+    fetch('/api/movies').then(r => r.json()).then(list => {
+      document.getElementById('movies').innerHTML =
+        list.map(m => `<li>${m.title} (${m.duration_min} phút)</li>`).join('');
+    }).catch(() => { document.getElementById('movies').textContent = 'Không tải được danh sách phim'; });
+  </script>
+</body>
+</html>
