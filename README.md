@@ -45,6 +45,10 @@ $env:DATABASE_URL="<EXTERNAL_URL>"; $env:DB_SSL="true"; npm run db:init
 
 Render Dashboard → New + → Blueprint → chọn repo này (dùng `render.yaml`).
 
+## Tài liệu kỹ thuật & Hướng dẫn tích hợp
+
+Xem toàn bộ kiến trúc Backend, đặc tả API, schema cơ sở dữ liệu và cẩm nang tích hợp trong thư mục [docs/](docs/README.md) (hoặc [doc/](doc/README.md)).
+
 ## Phân công
 
 | Thành viên      | Vai trò                    |

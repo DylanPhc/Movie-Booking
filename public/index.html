@@ -2,17 +2,363 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Đặt vé xem phim</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineCloud - Đặt Vé Xem Phim Trực Tuyến</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
 </head>
 <body>
-  <h1>Đặt vé xem phim</h1>
-  <ul id="movies">Đang tải...</ul>
-  <script>
-    fetch('/api/movies').then(r => r.json()).then(list => {
-      document.getElementById('movies').innerHTML =
-        list.map(m => `<li>${m.title} (${m.duration_min} phút)</li>`).join('');
-    }).catch(() => { document.getElementById('movies').textContent = 'Không tải được danh sách phim'; });
-  </script>
+
+  <!-- ================= SITE HEADER ================= -->
+  <header class="site-header">
+    <div class="header-container">
+      <a href="/" class="brand-logo">
+        <div class="brand-icon">🎬</div>
+        <div>Cine<span class="accent">Cloud</span></div>
+      </a>
+
+      <!-- Search bar -->
+      <div class="nav-search">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Tìm kiếm tên phim, thể loại...">
+      </div>
+
+      <!-- Header actions -->
+      <div class="header-actions">
+        <!-- Status Pill (Kiểm tra Backend) -->
+        <div class="status-pill" id="statusPill" title="Bấm để kiểm tra kết nối API" onclick="App.openDiagnosticModal()">
+          <span class="status-dot online" id="statusDot"></span>
+          <span id="statusText">Đang kiểm tra...</span>
+        </div>
+
+        <!-- Auth buttons (khi chưa đăng nhập) -->
+        <div class="auth-buttons" id="authButtons">
+          <button class="btn btn-secondary btn-sm" onclick="App.openModal('authModal')">Đăng nhập</button>
+          <button class="btn btn-primary btn-sm" onclick="App.openModal('authModal')">Đăng ký</button>
+        </div>
+
+        <!-- User profile badge (khi đã đăng nhập) -->
+        <div class="user-profile-badge" id="userProfileBadge">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div>
+            <div class="user-name" id="userName">Người dùng</div>
+            <span class="user-role-tag" id="userRole">Thành viên</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="App.openMyBookingsModal()">🎟️ Vé của tôi</button>
+          <button class="btn btn-outline btn-sm" id="logoutBtn" title="Đăng xuất">Đăng xuất</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= HERO BANNER ================= -->
+  <section class="hero-section">
+    <div class="hero-content">
+      <div class="hero-pill">⚡ Đồ Án Cloud Computing • Node.js + PostgreSQL</div>
+      <h1 class="hero-title">Trải Nghiệm Điện Ảnh Đỉnh Cao Cùng <span>CineCloud</span></h1>
+      <p class="hero-subtitle">Hệ thống đặt vé xem phim trực tuyến thời gian thực, chọn chỗ ngồi tương tác và thanh toán tiện lợi.</p>
+      <div class="hero-ctas">
+        <a href="#catalogSection" class="btn btn-primary">🎬 Khám phá phim đang chiếu</a>
+        <button class="btn btn-secondary" onclick="App.openDiagnosticModal()">⚙️ Trạng thái hệ thống</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MAIN CONTENT ================= -->
+  <main class="main-container" id="catalogSection">
+    <div class="section-header">
+      <h2 class="section-title">🍿 Phim Đang Chiếu</h2>
+      <!-- Genre filter pills -->
+      <div class="genre-filter-pills" id="genreFilterPills">
+        <!-- Tự động sinh từ JS -->
+      </div>
+    </div>
+
+    <!-- Movies grid -->
+    <div class="movies-grid" id="moviesGrid">
+      <!-- Tự động render từ JS -->
+    </div>
+  </main>
+
+  <!-- ================= MODAL: CHI TIẾT PHIM & SUẤT CHIẾU ================= -->
+  <div class="modal-backdrop" id="movieDetailsModal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalMovieTitle">Chi tiết phim</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('movieDetailsModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem;">
+          <div style="flex:1;min-width:240px;">
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+              <span class="badge-genre" id="modalMovieGenre">Hành động</span>
+              <span class="badge-duration" id="modalMovieDuration">120 phút</span>
+            </div>
+            <p id="modalMovieDesc" style="color:var(--text-muted);font-size:0.95rem;line-height:1.6;">Mô tả phim...</p>
+          </div>
+        </div>
+
+        <h4 style="font-size:1.1rem;margin-top:1rem;border-top:1px solid var(--border-subtle);padding-top:1rem;">
+          📅 Chọn Suất Chiếu
+        </h4>
+        <div class="showtime-grid" id="modalShowtimesList">
+          <!-- Suất chiếu render từ JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('movieDetailsModal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: CHỌN GHẾ TƯƠNG TÁC ================= -->
+  <div class="modal-backdrop" id="seatBookingModal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="seatModalMovieTitle">Chọn ghế xem phim</h3>
+          <div style="font-size:0.85rem;color:var(--text-muted);margin-top:0.2rem;">
+            Phòng: <span id="seatModalRoom" style="color:var(--accent-gold);font-weight:600;">Phòng 1</span> • Suất: <span id="seatModalShowtimeInfo">--:--</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="App.closeModal('seatBookingModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="seat-booking-layout">
+          <!-- Sơ đồ rạp bên trái -->
+          <div>
+            <div class="cinema-screen-wrap">
+              <div class="cinema-screen"></div>
+              <div class="screen-label">MÀN HÌNH CHIẾU</div>
+            </div>
+
+            <!-- Các hàng ghế -->
+            <div class="seats-container" id="seatsGridContainer">
+              <!-- Render ghế từ seats.js -->
+            </div>
+
+            <!-- Chú thích loại ghế -->
+            <div class="seat-legend">
+              <div class="legend-item">
+                <div class="legend-swatch" style="background:var(--seat-standard);border:1px solid var(--seat-standard-border);"></div>
+                <span>Ghế thường</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-swatch" style="background:var(--seat-vip);border:1px solid var(--seat-vip-border);"></div>
+                <span>Ghế VIP</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-swatch" style="background:var(--seat-selected);"></div>
+                <span>Đang chọn</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-swatch" style="background:var(--seat-occupied);"></div>
+                <span>Đã đặt</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bảng tóm tắt đặt vé bên phải -->
+          <div class="booking-summary-panel">
+            <h4 class="summary-title">Tóm Tắt Đơn Vé</h4>
+            <div class="summary-row">
+              <span>Đơn giá vé:</span>
+              <span id="unitPriceValue" style="color:#fff;font-weight:600;">--</span>
+            </div>
+            <div class="summary-row">
+              <span>Số ghế đã chọn:</span>
+              <span id="selectedSeatsCount" style="color:var(--accent-gold);font-weight:700;">0</span>
+            </div>
+            <div>
+              <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.4rem;">Vị trí ghế:</div>
+              <div class="selected-seats-pills" id="selectedSeatsPills">
+                <span style="color:var(--text-dim);font-size:0.85rem;">Chưa có ghế nào</span>
+              </div>
+            </div>
+
+            <div class="total-price-box">
+              <div class="summary-row">
+                <span>Tổng cộng:</span>
+                <span class="total-price-val" id="totalPriceValue">0 ₫</span>
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="confirmBookingBtn" disabled>
+              Xác nhận đặt vé
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: VÉ XÁC NHẬN (THÀNH CÔNG) ================= -->
+  <div class="modal-backdrop" id="ticketSuccessModal">
+    <div class="modal-card" style="max-width:480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🎉 Đặt Vé Thành Công!</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('ticketSuccessModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="ticket-card">
+          <div class="ticket-header">
+            <div style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px;">Mã đặt vé điện tử</div>
+            <div class="ticket-code" id="ticketConfirmCode">#BK-000000</div>
+          </div>
+
+          <!-- QR code visual -->
+          <div class="qr-box">
+            <svg viewBox="0 0 100 100" width="100%" height="100%">
+              <rect width="100" height="100" fill="#fff" />
+              <path d="M10 10h30v30h-30z M60 10h30v30h-30z M10 60h30v30h-30z M18 18h14v14h-14z M68 18h14v14h-14z M18 68h14v14h-14z M50 20h5v10h-5z M50 50h15v10h-15z M70 50h20v5h-20z M70 65h10v25h-10z M50 70h15v20h-15z" fill="#000"/>
+            </svg>
+          </div>
+
+          <div style="text-align:left;display:flex;flex-direction:column;gap:0.4rem;font-size:0.9rem;margin-top:1rem;">
+            <div><strong style="color:var(--text-muted);">Phim:</strong> <span id="ticketConfirmMovie" style="color:#fff;font-weight:700;">--</span></div>
+            <div><strong style="color:var(--text-muted);">Phòng chiếu:</strong> <span id="ticketConfirmTheater">--</span></div>
+            <div><strong style="color:var(--text-muted);">Suất chiếu:</strong> <span id="ticketConfirmTime">--</span></div>
+            <div><strong style="color:var(--text-muted);">Ghế:</strong> <span id="ticketConfirmSeats" style="color:var(--accent-green);font-weight:700;">--</span></div>
+            <div style="margin-top:0.4rem;border-top:1px dashed var(--border-subtle);padding-top:0.4rem;">
+              <strong style="color:var(--text-muted);">Tổng tiền:</strong> <span id="ticketConfirmTotal" style="color:var(--accent-gold);font-weight:700;font-size:1.1rem;">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('ticketSuccessModal')">Đóng</button>
+        <button class="btn btn-primary" onclick="App.closeModal('ticketSuccessModal'); App.openMyBookingsModal();">Xem vé của tôi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ĐĂNG NHẬP / ĐĂNG KÝ ================= -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-card" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Tài Khoản CineCloud</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('authModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab-btn active" id="tabLoginBtn">Đăng nhập</button>
+          <button type="button" class="auth-tab-btn" id="tabRegisterBtn">Đăng ký mới</button>
+        </div>
+
+        <!-- Form Đăng nhập -->
+        <div id="loginFormContainer">
+          <form id="loginForm">
+            <div class="form-group">
+              <label class="form-label" for="loginEmail">Email</label>
+              <input type="email" id="loginEmail" class="form-control" placeholder="user@example.com" required value="user@example.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="loginPassword">Mật khẩu</label>
+              <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required value="123456">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:1.5rem;">Đăng nhập ngay</button>
+          </form>
+        </div>
+
+        <!-- Form Đăng ký -->
+        <div id="registerFormContainer" style="display:none;">
+          <form id="registerForm">
+            <div class="form-group">
+              <label class="form-label" for="regFullName">Họ và tên</label>
+              <input type="text" id="regFullName" class="form-control" placeholder="Nguyễn Văn A" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regEmail">Email</label>
+              <input type="email" id="regEmail" class="form-control" placeholder="user@example.com" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regPassword">Mật khẩu</label>
+              <input type="password" id="regPassword" class="form-control" placeholder="Tối thiểu 6 ký tự" required minlength="6">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="regConfirmPassword">Xác nhận mật khẩu</label>
+              <input type="password" id="regConfirmPassword" class="form-control" placeholder="Nhập lại mật khẩu" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:1.5rem;">Tạo tài khoản</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: VÉ CỦA TÔI ================= -->
+  <div class="modal-backdrop" id="myBookingsModal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">🎟️ Lịch Sử Vé Của Tôi</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('myBookingsModal')">&times;</button>
+      </div>
+      <div class="modal-body" id="myBookingsList">
+        <!-- Render từ App.openMyBookingsModal() -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('myBookingsModal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: CHẨN ĐOÁN & CẤU HÌNH BACKEND ================= -->
+  <div class="modal-backdrop" id="diagnosticModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ Trạng Thái & Cấu Hình Backend</h3>
+        <button class="modal-close-btn" onclick="App.closeModal('diagnosticModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:1rem;margin-bottom:1.25rem;">
+          <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.4rem;">Trạng thái kiểm tra (/health):</div>
+          <div id="diagHealthResult" style="font-size:0.95rem;">Đang kiểm tra...</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="diagApiUrlInput">Địa chỉ Backend API (Base URL):</label>
+          <input type="text" id="diagApiUrlInput" class="form-control" placeholder="Ví dụ: http://localhost:3000 hoặc https://movie-booking.onrender.com">
+          <small style="color:var(--text-dim);font-size:0.8rem;display:block;margin-top:0.35rem;">
+            Để trống để tự động nhận diện theo cùng máy chủ Express (port 3000).
+          </small>
+        </div>
+
+        <div style="border-top:1px solid var(--border-subtle);padding-top:1rem;font-size:0.85rem;color:var(--text-muted);">
+          📖 <strong>Tài liệu kỹ thuật:</strong> Xem toàn bộ đặc tả API và kiến trúc tại thư mục <code>docs/</code> hoặc <code>doc/</code> trong mã nguồn.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('diagnosticModal')">Đóng</button>
+        <button class="btn btn-primary" onclick="App.saveCustomApiUrl()">Lưu cấu hình</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TOAST NOTIFICATION CONTAINER ================= -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="site-footer">
+    <div class="footer-content">
+      <div>
+        <div style="font-weight:700;color:#fff;">CineCloud Movie Booking</div>
+        <div>Đồ án môn Cloud Computing - Node.js + Express + PostgreSQL</div>
+      </div>
+      <div class="footer-links">
+        <a href="#catalogSection">Phim đang chiếu</a>
+        <a href="javascript:void(0)" onclick="App.openDiagnosticModal()">Chẩn đoán API</a>
+        <a href="javascript:void(0)" onclick="App.openMyBookingsModal()">Vé của tôi</a>
+      </div>
+    </div>
+    <div style="max-width:1280px;margin:1.5rem auto 0;text-align:center;font-size:0.8rem;color:var(--text-dim);">
+      Thành viên thực hiện: Trần Quốc Phước • Huỳnh Hoàng Lâm • Hồ Minh Nhật • Nguyễn Đình Minh
+    </div>
+  </footer>
+
+  <!-- ================= SCRIPTS ================= -->
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/seats.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
