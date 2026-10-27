@@ -22,6 +22,7 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/movies', require('./routes/movies'));
 app.use('/api/bookings', require('./routes/bookings'));
-
+// Để hỗ trợ GET /api/showtimes/:id/booked-seats
+app.use('/api', require('./routes/bookings'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server chạy cổng ${PORT}`));
